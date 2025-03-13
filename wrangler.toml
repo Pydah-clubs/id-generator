@@ -1,4 +1,4 @@
-name = "club-registration-worker"
+name = "id-generator"
 type = "javascript"
 account_id = "60d0ab3e425906c480d2f6a3a60cb47c"
 workers_dev = true

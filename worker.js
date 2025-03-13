@@ -1,27 +1,17 @@
 import { Hono } from "hono";
-import admin from "firebase-admin";
 import crypto from "crypto";
 
 const app = new Hono();
 
-// 🔥 Ensure Environment Variables are Loaded
-if (!Bun.env.FIREBASE_SERVICE_ACCOUNT_KEY || !Bun.env.RAZORPAY_SECRET) {
-  throw new Error("Missing FIREBASE_SERVICE_ACCOUNT_KEY or RAZORPAY_SECRET in environment variables.");
-}
-
-// ✅ Parse Firebase Service Account Key
-const serviceAccount = JSON.parse(Bun.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-
-// 🔥 Initialize Firebase Admin SDK
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-}
-const db = admin.firestore();
-
-// 🛡️ Get Razorpay Secret from Environment Variable
+// 🛡️ Environment Variables
+const FIREBASE_PROJECT_ID = Bun.env.FIREBASE_PROJECT_ID; // Your Firestore Project ID
+const FIREBASE_WEB_API_KEY = Bun.env.FIREBASE_WEB_API_KEY; // Get from Firebase Console
+const FIREBASE_AUTH_TOKEN = Bun.env.FIREBASE_AUTH_TOKEN; // Service Account Bearer Token
 const RAZORPAY_SECRET = Bun.env.RAZORPAY_SECRET;
+
+if (!FIREBASE_PROJECT_ID || !FIREBASE_AUTH_TOKEN || !RAZORPAY_SECRET) {
+  throw new Error("Missing required environment variables.");
+}
 
 // 📌 Webhook Endpoint to Receive Razorpay Events
 app.post("/razorpay-webhook", async (c) => {
@@ -49,12 +39,29 @@ app.post("/razorpay-webhook", async (c) => {
         return c.json({ error: "No Pin Found in Payment Data" }, 400);
       }
 
-      // 📌 Store Pin in Firestore
-      await db.collection("pins").doc(pin).set({
-        pin: pin,
-        status: "paid",
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      // 📌 Save PIN to Firestore Using REST API
+      const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/pins/${pin}`;
+
+      const firestoreResponse = await fetch(firestoreUrl, {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${FIREBASE_AUTH_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fields: {
+            pin: { stringValue: pin },
+            status: { stringValue: "paid" },
+            createdAt: { timestampValue: new Date().toISOString() },
+          },
+        }),
       });
+
+      if (!firestoreResponse.ok) {
+        const errorData = await firestoreResponse.json();
+        console.error("Failed to store pin in Firestore:", errorData);
+        return c.json({ error: "Failed to store pin in Firestore" }, 500);
+      }
 
       console.log(`✅ Pin ${pin} stored successfully in Firestore!`);
       return c.json({ message: "Pin Stored Successfully!" }, 200);

@@ -1,0 +1,8 @@
+name = "club-registration-worker"
+type = "javascript"
+account_id = "60d0ab3e425906c480d2f6a3a60cb47c"
+workers_dev = true
+route = ""
+zone_id = ""
+main = "worker.js"  # Your Cloudflare Worker script filename
+compatibility_date = "2024-03-13"
